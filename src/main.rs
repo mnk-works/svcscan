@@ -123,11 +123,13 @@ async fn resolve_targets(path: &Path, verbose: bool) -> Result<Vec<Target>> {
     for line in text.lines() {
         let Some((original, host, hint_port)) = parse_input_line(line) else { continue };
         let ip = if let Ok(ip) = host.parse::<IpAddr>() { ip } else {
-            let h = host.clone();
-            let addrs = tokio::task::spawn_blocking(move || format!("{}:0", h).to_socket_addrs()).await??;
+            let h = host.trim_end_matches('.').to_string();
+            vlog(verbose, format!("🌐 resolving {}", h));
+            let h2 = h.clone();
+            let addrs = tokio::task::spawn_blocking(move || (h2.as_str(), 0u16).to_socket_addrs()).await??;
             match addrs.map(|sa| sa.ip()).find(|ip| ip.is_ipv4()).or_else(|| {
-                format!("{}:0", host).to_socket_addrs().ok().and_then(|mut a| a.next().map(|s| s.ip()))
-            }) { Some(ip) => ip, None => { vlog(verbose, format!("⚠️  skip unresolved host: {}", host)); continue; } }
+                (h.as_str(), 0u16).to_socket_addrs().ok().and_then(|mut a| a.next().map(|s| s.ip()))
+            }) { Some(ip) => { vlog(verbose, format!("🌐 {} -> {}", h, ip)); ip }, None => { vlog(verbose, format!("⚠️  skip unresolved host: {}", host)); continue; } }
         };
         if seen.insert(ip) { out.push(Target { original, host, ip, _hint_port: hint_port }); }
         else { vlog(verbose, format!("↪️  dupe ip {} (from {})", ip, original)); }
@@ -145,11 +147,12 @@ async fn read_banner(stream: &mut TcpStream, to: Duration) -> String {
 }
 
 async fn grab_http(client: &reqwest::Client, ip: IpAddr, port: u16, to: Duration) -> Option<HttpInfo> {
+    // TLS certs are intentionally ignored (danger_accept_invalid_certs on client); any TLS/HTTP error -> skip, never fail scan.
     let schemes = if matches!(port, 443|8443|4443|9443|10443|6443) { ["https","http"] } else { ["http","https"] };
     for scheme in schemes {
         let host = match ip { IpAddr::V6(v6) => format!("[{}]", v6), IpAddr::V4(v4) => v4.to_string() };
         let url = format!("{}://{}:{}/", scheme, host, port);
-        let resp = match timeout(to, client.get(&url).header("User-Agent", "svcscan/0.1.1").send()).await {
+        let resp = match timeout(to, client.get(&url).header("User-Agent", "svcscan/0.1.2").send()).await {
             Ok(Ok(r)) => r, _ => continue,
         };
         let status = format!("{}", resp.status());
@@ -293,6 +296,9 @@ mod tests {
         assert_eq!(o, "http://203.0.113.10:7777/");
         assert_eq!(h, "203.0.113.10");
         assert_eq!(p, Some(7777));
+        let (_, hd, pd) = parse_input_line("https://example.com/path").unwrap();
+        assert_eq!(hd, "example.com");
+        assert_eq!(pd, Some(443));
     }
 
     #[test]

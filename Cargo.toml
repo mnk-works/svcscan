@@ -1,6 +1,6 @@
 [package]
 name = "svcscan"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Fast, reliable async TCP port scanner + banner/HTTP grabber. No external scanner deps. Navigable, append-safe results."
 license = "MIT"
