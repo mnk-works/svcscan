@@ -12,6 +12,10 @@ use tokio::time::timeout;
 
 #[derive(Clone, Debug)]
 pub struct HttpInfo {
+    /// `http` or `https` (which scheme succeeded)
+    pub scheme: String,
+    /// Full probed URL (kept for diagnostics; output shows scheme+status)
+    pub _url: String,
     pub status: String,
     pub server: String,
     pub headers: String,
@@ -31,12 +35,23 @@ pub fn sanitize(s: &str, max: usize) -> String {
     if s.chars().count() > max { format!("{}…", t) } else { t }
 }
 
-/// Read an initial banner from an open stream. Sends a small probe and reads with tight timeouts.
+/// Read an initial banner from an open stream.
+/// 1) short read-first (catches immediate greetings like SMTP/SSH/MySQL/POP3),
+/// 2) if empty, send a small probe and read again. All bounded by tight timeouts.
 pub async fn read_banner(stream: &mut TcpStream, to: Duration) -> String {
-    let _ = timeout(Duration::from_millis(to.as_millis().min(350) as u64), stream.write_all(b"\r\n")).await;
+    let cap = to.as_millis().min(450) as u64;
     let mut buf = vec![0u8; 512];
-    match timeout(Duration::from_millis(to.as_millis().min(450) as u64), stream.read(&mut buf)).await {
-        Ok(Ok(n)) if n > 0 => sanitize(&String::from_utf8_lossy(&buf[..n]), 220),
+    // Read-first: many services greet on connect.
+    if let Ok(Ok(n)) = timeout(Duration::from_millis(cap.min(220)), stream.read(&mut buf)).await {
+        if n > 0 {
+            return sanitize(&String::from_utf8_lossy(&buf[..n]), 220);
+        }
+    }
+    // Probe then read for request-response protocols.
+    let _ = timeout(Duration::from_millis(cap.min(300)), stream.write_all(b"\r\n")).await;
+    let mut buf2 = vec![0u8; 512];
+    match timeout(Duration::from_millis(cap), stream.read(&mut buf2)).await {
+        Ok(Ok(n)) if n > 0 => sanitize(&String::from_utf8_lossy(&buf2[..n]), 220),
         _ => String::new(),
     }
 }
@@ -59,7 +74,14 @@ pub async fn grab_http(client: &reqwest::Client, ip: IpAddr, port: u16, to: Dura
         }
         let body = timeout(to, resp.bytes()).await.ok().and_then(|r| r.ok()).unwrap_or_default();
         let body_excerpt = sanitize(&String::from_utf8_lossy(&body[..body.len().min(300)]), 300);
-        return Some(HttpInfo { status, server: sanitize(&server, 120), headers: sanitize(&hdrs.join(" | "), 400), body_excerpt });
+        return Some(HttpInfo {
+            scheme: scheme.to_string(),
+            _url: url.clone(),
+            status,
+            server: sanitize(&server, 120),
+            headers: sanitize(&hdrs.join(" | "), 400),
+            body_excerpt,
+        });
     }
     None
 }

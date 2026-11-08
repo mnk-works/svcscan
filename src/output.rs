@@ -21,7 +21,7 @@ pub fn format_host_result(t: &Target, findings: &[PortFinding], duration_ms: u12
         s.push_str(&format!("  - {}/tcp open", f.port));
         if !f.banner.is_empty() { s.push_str(&format!(" | banner: {}", f.banner)); }
         if let Some(h) = &f.http {
-            s.push_str(&format!(" | http: {}", h.status));
+            s.push_str(&format!(" | {}: {}", h.scheme, h.status));
             if !h.server.is_empty() { s.push_str(&format!(" | server: {}", h.server)); }
             if !h.headers.is_empty() { s.push_str(&format!(" | headers: {}", h.headers)); }
             if !h.body_excerpt.is_empty() { s.push_str(&format!(" | body: {}", h.body_excerpt)); }
