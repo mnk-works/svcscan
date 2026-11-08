@@ -1,0 +1,6 @@
+/target
+/result_*.txt
+/result.txt
+*.swp
+.DS_Store
+PLAN.md

@@ -1,0 +1,24 @@
+[package]
+name = "svcscan"
+version = "0.1.0"
+edition = "2021"
+description = "Simple async TCP port scanner + banner/HTTP grabber from a host list. Navigable, append-safe results."
+license = "MIT"
+repository = "https://github.com/mnk-works/svcscan"
+readme = "README.md"
+keywords = ["scanner", "ports", "tcp", "banner", "security"]
+categories = ["command-line-utilities", "network-programming"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+indicatif = "0.17"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "http2", "macos-system-configuration"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "fs", "io-util", "sync", "signal"] }
+url = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
