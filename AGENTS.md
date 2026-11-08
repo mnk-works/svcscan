@@ -29,6 +29,8 @@ cargo build --release
 - **Single connect per attempt:** banner is read from the already-connected stream (no double-connect).
 - **ulimit-aware:** detect/raise `RLIMIT_NOFILE` and cap concurrency; avoids `EMFILE`/missed ports.
 - **Append-safe output:** results flushed per host so the file is useful while running.
+- **Resilient input:** unresolvable/bad host entries and comments/blanks are skipped with a warning (never abort the whole scan).
+- **Finish notification:** emits an OSC 99 desktop notification (`\x1b]99;...`) to stderr on completion (best-effort; harmless if unsupported).
 
 ## Performance tuning (when changing defaults/logic)
 - Connect scans are **timeout-bound on filtered/drop hosts**; refused ports return fast. Lower timeout + bounded retries balances speed/reliability (defaults: 800ms, 1 retry). Raising `--timeout-ms`/`--retries` improves reliability on lossy/slow paths at a speed cost.

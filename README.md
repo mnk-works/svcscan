@@ -2,11 +2,12 @@
 
 Simple, fast, **reliable** async TCP port scanner + banner/HTTP grabber in pure Rust.
 
-- Reads a `.txt` of hosts/URLs/**domains** (one per line), resolves DNS, de-duplicates IPs
+- Reads a `.txt` of hosts/URLs/**domains** (one per line), resolves DNS, de-duplicates IPs (bad/unresolvable entries are **skipped with a warning**, never crash the scan)
 - Scans **all 65,535 TCP ports** per host (async `connect`, no external scanner binaries)
 - Grabs **TCP banners** and **HTTP(S) info** (status, server, headers, capped body excerpt)
 - **TLS certs ignored** and TLS/HTTP errors never fail the scan (best-effort fingerprinting)
 - **Navigable, append-safe** results (check the file while it runs) + **speed stats** (per-host `⏱️`, `ports/s`)
+- **Desktop notification on finish** via **OSC 99** (kitty protocol; works in kitty/foot/noctalia and other supporting terminals) — harmless where unsupported
 - **Auto-tuned**: detects/raises `ulimit -n` (nofile) for concurrency; retries on connect timeout for reliability
 - Modular, tested, commented codebase (`src/{cli,config,input,scan,probe,output}.rs`)
 
@@ -32,7 +33,7 @@ cd svcscan && cargo build --release
 svcscan <INPUT.txt> [OUTPUT] [--verbose] [--concurrency N] [--timeout-ms MS] [--retries N]
 ```
 
-- `INPUT.txt` — hosts/URLs/IPs/domains (one per line):
+- `INPUT.txt` — hosts/URLs/IPs/domains (one per line). `#` comments/blanks and unresolvable/bad hosts are skipped (scan continues).
   - `http://203.0.113.10:7777/` · `https://example.com/` · `example.com` · `198.51.100.5:8080`
 - `OUTPUT` — optional; default `result_<unix_timestamp>.txt` (cwd)
 - `--verbose, -v` — debug logs to stderr (resolution, progress details)

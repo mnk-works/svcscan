@@ -71,15 +71,25 @@ pub async fn resolve_targets(path: &Path, verbose: bool) -> Result<Vec<Target>> 
             let h = host.trim_end_matches('.').to_string();
             vlog(verbose, format!("🌐 resolving {}", h));
             let h2 = h.clone();
-            let addrs = tokio::task::spawn_blocking(move || (h2.as_str(), 0u16).to_socket_addrs())
-                .await??;
+            let resolved = tokio::task::spawn_blocking(move || (h2.as_str(), 0u16).to_socket_addrs()).await;
+            let addrs = match resolved {
+                Ok(Ok(a)) => a,
+                Ok(Err(e)) => {
+                    eprintln!("⚠️  skip unresolved host {} ({}). continuing.", host, e);
+                    continue;
+                }
+                Err(e) => {
+                    eprintln!("⚠️  skip unresolved host {} (resolver task: {}). continuing.", host, e);
+                    continue;
+                }
+            };
             match addrs
                 .map(|sa: SocketAddr| sa.ip())
                 .find(|ip| ip.is_ipv4())
                 .or_else(|| (h.as_str(), 0u16).to_socket_addrs().ok().and_then(|mut a| a.next().map(|s| s.ip())))
             {
                 Some(ip) => { vlog(verbose, format!("🌐 {} -> {}", h, ip)); ip }
-                None => { vlog(verbose, format!("⚠️  skip unresolved host: {}", host)); continue; }
+                None => { eprintln!("⚠️  skip unresolved host {} (no addresses). continuing.", host); continue; }
             }
         };
         if seen.insert(ip) {

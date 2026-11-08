@@ -99,6 +99,21 @@ async fn main() -> Result<()> {
     append_file(&out, &file_lock, &summary).await?;
     pb.finish_with_message("done");
     eprintln!("{}", summary);
+
+    // Desktop notification via OSC 99 (kitty protocol; supported by kitty, foot, noctalia, etc.).
+    // Harmless in terminals that don't recognize it. Written to stderr (same as progress).
+    // Keys: i=id, d=1 done, p=body payload, s=system (best-effort sound where supported).
+    let msg = format!(
+        "svcscan done: {} targets, {} open ports ({:.1}s)",
+        targets.len(), total_open, dur_s
+    );
+    let notif = format!("\x1b]99;i=svcscan:d=1:p=body:s=system;{}\x1b\\", msg);
+    use std::io::Write as _;
+    let mut se = std::io::stderr();
+    let _ = se.write_all(notif.as_bytes());
+    let _ = se.write_all(b"\n");
+    let _ = se.flush();
+
     Ok(())
 }
 
