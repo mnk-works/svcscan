@@ -13,7 +13,7 @@ pub struct Args {
     /// Input .txt file with hosts/URLs/IPs (one per line)
     pub input: PathBuf,
 
-    /// Output file (default: result_<unix_timestamp>.txt)
+    /// Output file (default: scanned_<unix_timestamp>.txt)
     pub output: Option<PathBuf>,
 
     /// Verbose/debug logs to stderr

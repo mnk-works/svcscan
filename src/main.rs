@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     let retries = args.retries.unwrap_or(1);
     let cfg = ScanCfg { concurrency, timeout: Duration::from_millis(timeout_ms), retries, verbose: args.verbose };
 
-    let out = args.output.clone().unwrap_or_else(|| PathBuf::from(format!("result_{}.txt", unix_ts())));
+    let out = args.output.clone().unwrap_or_else(|| PathBuf::from(format!("scanned_{}.txt", unix_ts())));
     let targets = resolve_targets(&args.input, args.verbose).await?;
     if targets.is_empty() { anyhow::bail!("no targets resolved from {}", args.input.display()); }
 

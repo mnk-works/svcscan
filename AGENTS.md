@@ -11,7 +11,7 @@ cargo test                  # unit tests (parsing, sanitize, ulimit tuning)
 cargo build --release
 ./target/release/svcscan <INPUT.txt> [OUTPUT] [-v] [--concurrency N] [--timeout-ms MS] [--retries N]
 ```
-- Default output: `result_<unix_timestamp>.txt` (append-as-it-goes).
+- Default output: `scanned_<unix_timestamp>.txt` (append-as-it-goes).
 - Smoke test: `printf 'localhost\n' > /tmp/t.txt && cargo run --release -- /tmp/t.txt /tmp/out.txt --timeout-ms 100 --concurrency 4000`
 
 ## Code layout (modular)
