@@ -18,8 +18,11 @@ pub struct HttpInfo {
     pub _url: String,
     pub status: String,
     pub server: String,
-    pub headers: String,
+    /// Response headers, one "key: value" entry per header (kept separate for readable output).
+    pub headers: Vec<String>,
     pub body_excerpt: String,
+    /// Total body length before truncation (for "(shown of total) char" reporting).
+    pub body_total: usize,
 }
 
 pub fn sanitize(s: &str, max: usize) -> String {
@@ -73,14 +76,16 @@ pub async fn grab_http(client: &reqwest::Client, ip: IpAddr, port: u16, to: Dura
             if let Ok(val) = v.to_str() { hdrs.push(format!("{}: {}", k.as_str(), sanitize(val, 80))); }
         }
         let body = timeout(to, resp.bytes()).await.ok().and_then(|r| r.ok()).unwrap_or_default();
+        let body_total = body.len();
         let body_excerpt = sanitize(&String::from_utf8_lossy(&body[..body.len().min(300)]), 300);
         return Some(HttpInfo {
             scheme: scheme.to_string(),
             _url: url.clone(),
             status,
             server: sanitize(&server, 120),
-            headers: sanitize(&hdrs.join(" | "), 400),
+            headers: hdrs,
             body_excerpt,
+            body_total,
         });
     }
     None

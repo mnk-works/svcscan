@@ -23,7 +23,7 @@ use tokio::sync::Mutex;
 use cli::Args;
 use config::{tune_ulimit_and_concurrency, ScanCfg};
 use input::{resolve_targets, vlog};
-use output::{append_file, format_host_result};
+use output::{append_file, format_host_result, SEP};
 use scan::scan_host;
 
 fn unix_ts() -> u64 {
@@ -57,8 +57,8 @@ async fn main() -> Result<()> {
     let start_wall = unix_ts();
     let start = Instant::now();
     let header = format!(
-        "🔎 svcscan v{} results | start={} | targets={} | concurrency={} | timeout_ms={} | retries={} | {}\ninput={}\n{}\n",
-        env!("CARGO_PKG_VERSION"), start_wall, targets.len(), cfg.concurrency, timeout_ms, retries, ulimit_note, args.input.display(), "=".repeat(72)
+        "{}\nprobing {} target(s) from {} (all 65535 TCP ports each)\n{}\n",
+        SEP, targets.len(), args.input.display(), SEP
     );
     tokio::fs::write(&out, &header).await?;
     eprintln!("🚀 svcscan v{}: {} targets → {} (append) | c={} t={}ms r={} | {}", env!("CARGO_PKG_VERSION"), targets.len(), out.display(), cfg.concurrency, timeout_ms, retries, ulimit_note);
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
         let h_ms = hstart.elapsed().as_millis();
         total_open += findings.len();
         host_open.insert(t.ip.to_string(), (findings.len(), h_ms));
-        append_file(&out, &file_lock, &format_host_result(t, &findings, h_ms)).await?;
+        append_file(&out, &file_lock, &format_host_result(t, &findings, h_ms, i + 1, targets.len())).await?;
         let mark = if findings.is_empty() { "⚠️" } else { "✅" };
         let rate = if h_ms > 0 { (65535.0 / (h_ms as f64 / 1000.0)) as u64 } else { 0 };
         pb.println(format!("{} {} → {} open (⏱️ {:.1}s, ~{} ports/s)", mark, t.ip, findings.len(), h_ms as f64 / 1000.0, rate));
@@ -89,12 +89,18 @@ async fn main() -> Result<()> {
     let total_slots = 65535u64.saturating_mul(targets.len() as u64);
     let overall_rate = (total_slots as f64 / dur_s) as u64;
     let end_wall = unix_ts();
+    let responded = host_open.values().filter(|(n, _)| *n > 0).count();
     let mut summary = format!(
-        "\n{}\n📊 SUMMARY | end={} | duration={:.1}s | targets={} | total_open_ports={} | c={} t={}ms r={} | ⚡ ~{} ports/s (65535×hosts/duration)\n",
-        "=".repeat(72), end_wall, dur_s, targets.len(), total_open, cfg.concurrency, timeout_ms, retries, overall_rate
+        "\n{}\ndone: {}/{} responded | 📊 total_open_ports={} | duration={:.1}s | ⚡ ~{} ports/s (65535×hosts/duration)\n",
+        SEP, responded, targets.len(), total_open, dur_s, overall_rate
     );
-    for (ip, (n, ms)) in &host_open { summary.push_str(&format!("  - {}: {} open (⏱️ {:.1}s)\n", ip, n, *ms as f64 / 1000.0)); }
+    for (ip, (n, ms)) in &host_open {
+        if *n > 0 {
+            summary.push_str(&format!("  - {}: {} open (⏱️ {:.1}s)\n", ip, n, *ms as f64 / 1000.0));
+        }
+    }
     summary.push_str(&format!("📄 output: {}\n", out.display()));
+    summary.push_str(&format!("{}\n", SEP));
     summary.push_str("ℹ️  rate is an effective throughput (all 65,535 ports per host attempted; refused=fast, timeout=slow).\n");
     append_file(&out, &file_lock, &summary).await?;
     pb.finish_with_message("done");
