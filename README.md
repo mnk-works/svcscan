@@ -2,7 +2,7 @@
 
 Simple, fast, **reliable** async TCP port scanner + banner/HTTP grabber in pure Rust.
 
-- Reads a `.txt` of hosts/URLs/**domains** (one per line), resolves DNS, de-duplicates IPs (bad/unresolvable entries are **skipped with a warning**, never crash the scan)
+- Reads a `.txt` of hosts/URLs/**domains** (one per line), resolves DNS to **all** IPs (A + AAAA), de-duplicates IPs (bad/unresolvable entries are **skipped with a warning**, never crash the scan)
 - Scans **all 65,535 TCP ports** per host (async `connect`, no external scanner binaries)
 - Grabs **TCP banners** and **HTTP(S) info** (status, server, headers, capped body excerpt)
 - **TLS certs ignored** and TLS/HTTP errors never fail the scan (best-effort fingerprinting)

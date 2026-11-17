@@ -56,24 +56,29 @@ pub fn parse_input_line(line: &str) -> Option<(String, String, Option<u16>)> {
 }
 
 /// Resolve all targets from a file, de-duplicating by IP. Hostnames/domains are resolved via system DNS.
-pub async fn resolve_targets(path: &Path, verbose: bool) -> Result<Vec<Target>> {
+/// Returns (targets, input_host_count) so callers can report resolution progress.
+pub async fn resolve_targets(path: &Path, verbose: bool) -> Result<(Vec<Target>, usize)> {
     let text = tokio::fs::read_to_string(path)
         .await
         .with_context(|| format!("read {}", path.display()))?;
     let mut out = Vec::new();
     let mut seen: BTreeSet<IpAddr> = BTreeSet::new();
+    let mut input_hosts: usize = 0;
 
     for line in text.lines() {
         let Some((original, host, hint_port)) = parse_input_line(line) else { continue };
-        let ip = if let Ok(ip) = host.parse::<IpAddr>() {
-            ip
+        input_hosts += 1;
+        let ips: Vec<IpAddr> = if let Ok(ip) = host.parse::<IpAddr>() {
+            // Literal IP — single target.
+            vec![ip]
         } else {
+            // Domain/hostname — resolve to ALL addresses (A + AAAA), not just one.
             let h = host.trim_end_matches('.').to_string();
             vlog(verbose, format!("🌐 resolving {}", h));
             let h2 = h.clone();
             let resolved = tokio::task::spawn_blocking(move || (h2.as_str(), 0u16).to_socket_addrs()).await;
             let addrs = match resolved {
-                Ok(Ok(a)) => a,
+                Ok(Ok(a)) => a.collect::<Vec<_>>(),
                 Ok(Err(e)) => {
                     eprintln!("⚠️  skip unresolved host {} ({}). continuing.", host, e);
                     continue;
@@ -83,20 +88,31 @@ pub async fn resolve_targets(path: &Path, verbose: bool) -> Result<Vec<Target>> 
                     continue;
                 }
             };
-            match addrs
-                .map(|sa: SocketAddr| sa.ip())
-                .find(|ip| ip.is_ipv4())
-                .or_else(|| (h.as_str(), 0u16).to_socket_addrs().ok().and_then(|mut a| a.next().map(|s| s.ip())))
-            {
-                Some(ip) => { vlog(verbose, format!("🌐 {} -> {}", h, ip)); ip }
-                None => { eprintln!("⚠️  skip unresolved host {} (no addresses). continuing.", host); continue; }
+            if addrs.is_empty() {
+                eprintln!("⚠️  skip unresolved host {} (no addresses). continuing.", host);
+                continue;
             }
+            let ips: Vec<IpAddr> = addrs.into_iter().map(|sa| sa.ip()).collect();
+            vlog(verbose, format!(
+                "🌐 {} -> {}",
+                h,
+                ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>().join(", ")
+            ));
+            ips
         };
-        if seen.insert(ip) {
-            out.push(Target { original, host, ip, hint_port });
-        } else {
-            vlog(verbose, format!("↪️  dupe ip {} (from {})", ip, original));
+
+        for ip in ips {
+            if seen.insert(ip) {
+                out.push(Target {
+                    original: original.clone(),
+                    host: host.clone(),
+                    ip,
+                    hint_port,
+                });
+            } else {
+                vlog(verbose, format!("↪️  dupe ip {} (from {})", ip, original));
+            }
         }
     }
-    Ok(out)
+    Ok((out, input_hosts))
 }

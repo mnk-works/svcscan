@@ -41,8 +41,10 @@ async fn main() -> Result<()> {
     let cfg = ScanCfg { concurrency, timeout: Duration::from_millis(timeout_ms), retries, verbose: args.verbose };
 
     let out = args.output.clone().unwrap_or_else(|| PathBuf::from(format!("scanned_{}.txt", unix_ts())));
-    let targets = resolve_targets(&args.input, args.verbose).await?;
+    eprintln!("🔍 resolving domains from {}...", args.input.display());
+    let (targets, input_hosts) = resolve_targets(&args.input, args.verbose).await?;
     if targets.is_empty() { anyhow::bail!("no targets resolved from {}", args.input.display()); }
+    eprintln!("✅ resolved {} host(s) → {} unique ip(s)", input_hosts, targets.len());
 
     // Shared HTTP client (TLS cert validation disabled; errors never fail the scan).
     let http = reqwest::Client::builder()
